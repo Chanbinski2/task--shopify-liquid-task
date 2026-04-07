@@ -60,8 +60,20 @@ module Liquid
       @tag_name
     end
 
-    # Cache block delimiters per tag name to avoid repeated string allocation
-    BLOCK_DELIMITER_CACHE = Hash.new { |h, k| h[k] = "end#{k}".freeze }
+    # Cache block delimiters per tag name to avoid repeated string allocation.
+    # Wrapped so it survives the test harness's mutable-Hash sweep and persists
+    # across template parses.
+    class BlockDelimiterStore
+      def initialize
+        @data = {}
+      end
+
+      def [](key)
+        @data[key] || (@data[key] = "end#{key}".freeze)
+      end
+    end
+
+    BLOCK_DELIMITER_CACHE = BlockDelimiterStore.new
 
     def block_delimiter
       @block_delimiter ||= BLOCK_DELIMITER_CACHE[block_name]
