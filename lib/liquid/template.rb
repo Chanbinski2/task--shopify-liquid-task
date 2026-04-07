@@ -152,11 +152,11 @@ module Liquid
         c
       when Liquid::Drop
         drop         = args.shift
-        drop.context = Context.new([drop, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits, {}, @environment)
+        drop.context = Context.new([drop, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits, Const::EMPTY_HASH, @environment)
       when Hash
-        Context.new([args.shift, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits, {}, @environment)
+        Context.new([args.shift, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits, Const::EMPTY_HASH, @environment)
       when nil
-        Context.new(assigns, instance_assigns, registers, @rethrow_errors, @resource_limits, {}, @environment)
+        Context.new(assigns, instance_assigns, registers, @rethrow_errors, @resource_limits, Const::EMPTY_HASH, @environment)
       else
         raise ArgumentError, "Expected Hash or Liquid::Context as parameter"
       end
