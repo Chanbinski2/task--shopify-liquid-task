@@ -138,6 +138,8 @@ module Liquid
       cursor = parse_context.cursor
       environment = parse_context.environment
       track_lines = !parse_context.line_number.nil?
+      cache_eligible = parse_context.error_mode == :lax && !track_lines
+      tokens_arr = tokenizer.instance_variable_get(:@tokens) if cache_eligible
       while (token = tokenizer.shift)
         next if token.empty?
 
@@ -167,7 +169,7 @@ module Liquid
               # determine how to proceed
               return yield tag_name, markup
             end
-            if parse_context.error_mode == :lax && !track_lines
+            if cache_eligible
               if !(tag <= Liquid::Block)
                 # Self-closing tag — cache by start token only
                 cached = SHARED_TAG_INSTANCE_CACHE[token]
@@ -179,7 +181,6 @@ module Liquid
                 end
               else
                 # Block tag — cache by start token + body verification
-                tokens_arr = tokenizer.instance_variable_get(:@tokens)
                 pre_offset = tokenizer.instance_variable_get(:@offset)
                 cached_entry = SHARED_BLOCK_TAG_CACHE[token]
                 cache_hit = false
@@ -217,7 +218,16 @@ module Liquid
             @nodelist << new_tag
           elsif second_byte == OPEN_CURLEY_BYTE
             whitespace_handler(token, parse_context)
-            @nodelist << create_variable(token, parse_context)
+            if cache_eligible
+              cached_var = SHARED_VAR_INSTANCE_CACHE[token]
+              if cached_var
+                @nodelist << cached_var
+              else
+                @nodelist << create_variable(token, parse_context)
+              end
+            else
+              @nodelist << create_variable(token, parse_context)
+            end
             @blank = false
           else
             # Fallback: text token starting with '{'
