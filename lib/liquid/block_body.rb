@@ -179,6 +179,36 @@ module Liquid
                   new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
                   SHARED_TAG_INSTANCE_CACHE[token] = new_tag
                 end
+              elsif tag_name == 'comment'
+                # Comment tags render nothing and their body content doesn't
+                # affect output. Skip-scan to matching {% endcomment %} and
+                # reuse a shared Comment instance.
+                pre_offset = tokenizer.instance_variable_get(:@offset)
+                shared_comment = SHARED_COMMENT_HOLDER[0]
+                if shared_comment.nil?
+                  shared_comment = tag.parse(tag_name, markup, tokenizer, parse_context)
+                  SHARED_COMMENT_HOLDER[0] = shared_comment
+                  new_tag = shared_comment
+                else
+                  # Skip to matching endcomment
+                  depth = 1
+                  i = pre_offset
+                  len = tokens_arr.length
+                  while i < len && depth > 0
+                    t = tokens_arr[i]
+                    i += 1
+                    next if t.bytesize < 6
+                    if t.getbyte(0) == 123 && t.getbyte(1) == 37 # {%
+                      if t.include?('endcomment')
+                        depth -= 1
+                      elsif t.include?('comment')
+                        depth += 1
+                      end
+                    end
+                  end
+                  tokenizer.instance_variable_set(:@offset, i)
+                  new_tag = shared_comment
+                end
               else
                 # Block tag — cache by start token + body verification
                 pre_offset = tokenizer.instance_variable_get(:@offset)
@@ -361,6 +391,10 @@ module Liquid
     # tokens in the tokenizer exactly match the cached body. If yes, the
     # cached parsed tag is reused and the tokenizer offset is advanced.
     SHARED_BLOCK_TAG_CACHE = VarInstanceStore.new
+
+    # 1-element array holding the shared Comment tag instance (lazy init).
+    # Array (not Hash) so the harness's mutable-Hash sweep doesn't clear it.
+    SHARED_COMMENT_HOLDER = [nil]
 
     def create_variable(token, parse_context)
       len = token.bytesize
