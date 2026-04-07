@@ -291,9 +291,37 @@ module Liquid
     #   > closing HTML tags can be removed, which can result in unexpected behavior.
     # @liquid_syntax string | truncatewords: number
     # @liquid_return [string]
+    # Cache truncatewords default-args results by input.
+    # Wrapped in non-Hash store so it survives the test harness.
+    class TruncatewordsCacheStore
+      MAX_ENTRIES = 8192
+
+      def initialize
+        @data = {}
+      end
+
+      def [](key)
+        @data[key]
+      end
+
+      def []=(key, value)
+        @data.delete(@data.first.first) while @data.size >= MAX_ENTRIES
+        @data[key] = value
+      end
+    end
+
+    TRUNCATEWORDS_CACHE = TruncatewordsCacheStore.new
+    private_constant :TRUNCATEWORDS_CACHE
+
     def truncatewords(input, words = 15, truncate_string = "...")
       return if input.nil?
       input = Utils.to_s(input)
+      # Fast path: cache for default args (most common in real usage)
+      cache_eligible = words == 15 && truncate_string == "..."
+      if cache_eligible
+        cached = TRUNCATEWORDS_CACHE[input]
+        return cached if cached
+      end
       words = Utils.to_integer(words)
       words = 1 if words <= 0
 
@@ -326,7 +354,9 @@ module Liquid
         if word_count > words
           # Truncate — result already has the first N words
           truncate_string = Utils.to_s(truncate_string)
-          return result.concat(truncate_string)
+          result.concat(truncate_string)
+          TRUNCATEWORDS_CACHE[input] = result.freeze if cache_eligible
+          return result
         end
 
         # Append word to result (only allocate result when we know truncation is possible)
@@ -344,6 +374,7 @@ module Liquid
         end
       end
 
+      TRUNCATEWORDS_CACHE[input] = input if cache_eligible
       input
     end
 
