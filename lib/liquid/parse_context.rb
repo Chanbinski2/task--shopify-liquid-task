@@ -17,7 +17,7 @@ module Liquid
       @string_scanner = StringScanner.new("")
 
       @expression_cache = if options[:expression_cache].nil?
-        {}
+        Expression::SHARED_EXPR_STORE
       elsif options[:expression_cache].respond_to?(:[]) && options[:expression_cache].respond_to?(:[]=)
         options[:expression_cache]
       elsif options[:expression_cache]
