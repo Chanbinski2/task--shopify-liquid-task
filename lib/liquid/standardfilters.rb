@@ -127,7 +127,13 @@ module Liquid
     # @liquid_syntax string | escape
     # @liquid_return [string]
     def escape(input)
-      CGI.escapeHTML(Utils.to_s(input)) unless input.nil?
+      return if input.nil?
+      s = Utils.to_s(input)
+      cached = ESCAPE_CACHE[s]
+      return cached if cached
+      result = CGI.escapeHTML(s)
+      ESCAPE_CACHE[s] = result.freeze
+      result
     end
     alias_method :h, :escape
 
@@ -313,6 +319,28 @@ module Liquid
     TRUNCATEWORDS_CACHE = TruncatewordsCacheStore.new
     private_constant :TRUNCATEWORDS_CACHE
 
+    # Generic per-filter result cache (input → output) for pure unary filters.
+    class FilterResultCacheStore
+      MAX_ENTRIES = 8192
+
+      def initialize
+        @data = {}
+      end
+
+      def [](key)
+        @data[key]
+      end
+
+      def []=(key, value)
+        @data.delete(@data.first.first) while @data.size >= MAX_ENTRIES
+        @data[key] = value
+      end
+    end
+
+    ESCAPE_CACHE = FilterResultCacheStore.new
+    STRIP_HTML_CACHE = FilterResultCacheStore.new
+    private_constant :ESCAPE_CACHE, :STRIP_HTML_CACHE
+
     def truncatewords(input, words = 15, truncate_string = "...")
       return if input.nil?
       input = Utils.to_s(input)
@@ -449,9 +477,12 @@ module Liquid
     # @liquid_return [string]
     def strip_html(input)
       input = Utils.to_s(input)
+      cached = STRIP_HTML_CACHE[input]
+      return cached if cached
       empty  = ''
       result = input.gsub(STRIP_HTML_BLOCKS, empty)
       result.gsub!(STRIP_HTML_TAGS, empty)
+      STRIP_HTML_CACHE[input] = result.freeze
       result
     end
 
