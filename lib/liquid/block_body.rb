@@ -135,6 +135,8 @@ module Liquid
     end
 
     private def parse_for_document(tokenizer, parse_context, &block)
+      cursor = parse_context.cursor
+      environment = parse_context.environment
       while (token = tokenizer.shift)
         next if token.empty?
 
@@ -143,7 +145,6 @@ module Liquid
           second_byte = token.getbyte(1)
           if second_byte == PERCENT_BYTE
             whitespace_handler(token, parse_context)
-            cursor = parse_context.cursor
             tag_name = cursor.parse_tag_token(token)
             unless tag_name
               return handle_invalid_tag_token(token, parse_context, &block)
@@ -160,7 +161,7 @@ module Liquid
               next
             end
 
-            unless (tag = parse_context.environment.tag_for_name(tag_name))
+            unless (tag = environment.tag_for_name(tag_name))
               # end parsing if we reach an unknown tag and let the caller decide
               # determine how to proceed
               return yield tag_name, markup
