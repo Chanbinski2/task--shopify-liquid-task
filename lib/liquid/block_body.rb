@@ -167,14 +167,48 @@ module Liquid
               # determine how to proceed
               return yield tag_name, markup
             end
-            # Self-closing tag cache: only when not a Block subclass and in lax mode w/o line numbers
-            if !(tag <= Liquid::Block) && parse_context.error_mode == :lax && !track_lines
-              cached = SHARED_TAG_INSTANCE_CACHE[token]
-              if cached
-                new_tag = cached
+            if parse_context.error_mode == :lax && !track_lines
+              if !(tag <= Liquid::Block)
+                # Self-closing tag — cache by start token only
+                cached = SHARED_TAG_INSTANCE_CACHE[token]
+                if cached
+                  new_tag = cached
+                else
+                  new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+                  SHARED_TAG_INSTANCE_CACHE[token] = new_tag
+                end
               else
-                new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
-                SHARED_TAG_INSTANCE_CACHE[token] = new_tag
+                # Block tag — cache by start token + body verification
+                tokens_arr = tokenizer.instance_variable_get(:@tokens)
+                pre_offset = tokenizer.instance_variable_get(:@offset)
+                cached_entry = SHARED_BLOCK_TAG_CACHE[token]
+                cache_hit = false
+                if cached_entry
+                  cached_tag, cached_body = cached_entry
+                  body_len = cached_body.length
+                  if pre_offset + body_len <= tokens_arr.length
+                    match = true
+                    j = 0
+                    while j < body_len
+                      if tokens_arr[pre_offset + j] != cached_body[j]
+                        match = false
+                        break
+                      end
+                      j += 1
+                    end
+                    if match
+                      new_tag = cached_tag
+                      tokenizer.instance_variable_set(:@offset, pre_offset + body_len)
+                      cache_hit = true
+                    end
+                  end
+                end
+                unless cache_hit
+                  new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+                  post_offset = tokenizer.instance_variable_get(:@offset)
+                  body = tokens_arr[pre_offset, post_offset - pre_offset]
+                  SHARED_BLOCK_TAG_CACHE[token] = [new_tag, body] if body
+                end
               end
             else
               new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
@@ -311,6 +345,12 @@ module Liquid
     # Shared cache of self-closing Tag instances (those that don't consume
     # additional tokens beyond their start token), keyed by full token bytes.
     SHARED_TAG_INSTANCE_CACHE = VarInstanceStore.new
+
+    # Shared cache of Block tag instances. Keyed by start token; value is
+    # [tag_instance, body_token_array]. On lookup we verify that the next N
+    # tokens in the tokenizer exactly match the cached body. If yes, the
+    # cached parsed tag is reused and the tokenizer offset is advanced.
+    SHARED_BLOCK_TAG_CACHE = VarInstanceStore.new
 
     def create_variable(token, parse_context)
       len = token.bytesize
