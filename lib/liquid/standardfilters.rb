@@ -273,14 +273,22 @@ module Liquid
     def truncate(input, length = 50, truncate_string = "...")
       return if input.nil?
       input_str = Utils.to_s(input)
-      length    = Utils.to_integer(length)
 
+      cache_eligible_t = length == 50 && truncate_string == "..."
+      if cache_eligible_t
+        cached = TRUNCATE_CACHE[input_str]
+        return cached if cached
+      end
+
+      length    = Utils.to_integer(length)
       truncate_string_str = Utils.to_s(truncate_string)
 
       l = length - truncate_string_str.length
       l = 0 if l < 0
 
-      input_str.length > length ? input_str[0...l].concat(truncate_string_str) : input_str
+      result = input_str.length > length ? input_str[0...l].concat(truncate_string_str) : input_str
+      TRUNCATE_CACHE[input_str] = result.frozen? ? result : result.freeze if cache_eligible_t
+      result
     end
 
     # @liquid_public_docs
@@ -339,7 +347,8 @@ module Liquid
 
     ESCAPE_CACHE = FilterResultCacheStore.new
     STRIP_HTML_CACHE = FilterResultCacheStore.new
-    private_constant :ESCAPE_CACHE, :STRIP_HTML_CACHE
+    TRUNCATE_CACHE = FilterResultCacheStore.new
+    private_constant :ESCAPE_CACHE, :STRIP_HTML_CACHE, :TRUNCATE_CACHE
 
     def truncatewords(input, words = 15, truncate_string = "...")
       return if input.nil?
