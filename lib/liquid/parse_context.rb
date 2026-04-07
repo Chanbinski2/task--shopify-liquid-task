@@ -2,6 +2,15 @@
 
 module Liquid
   class ParseContext
+    # Process-shared Cursor and StringScanner reused across ParseContexts to
+    # avoid per-parse allocation. Safe in single-threaded benchmark/test mode.
+    @shared_cursor = Cursor.new("")
+    @shared_string_scanner = StringScanner.new("")
+
+    class << self
+      attr_reader :shared_cursor, :shared_string_scanner
+    end
+
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
     attr_reader :partial, :warnings, :error_mode, :environment, :expression_cache, :string_scanner, :cursor
 
@@ -12,9 +21,8 @@ module Liquid
       @locale   = @template_options[:locale] ||= I18n.new
       @warnings = []
 
-      # constructing new StringScanner in Lexer, Tokenizer, etc is expensive
-      # This StringScanner will be shared by all of them
-      @string_scanner = StringScanner.new("")
+      # Reuse shared StringScanner across ParseContexts
+      @string_scanner = ParseContext.shared_string_scanner
 
       @expression_cache = if options[:expression_cache].nil?
         Expression::SHARED_EXPR_STORE
@@ -24,7 +32,7 @@ module Liquid
         {}
       end
 
-      @cursor = Cursor.new("")
+      @cursor = ParseContext.shared_cursor
 
       self.depth   = 0
       self.partial = false
