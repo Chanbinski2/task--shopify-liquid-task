@@ -274,9 +274,40 @@ module Liquid
 
     CLOSE_CURLEY_BYTE = 125 # '}'.ord
 
+    # Shared cache of Variable instances keyed by full token bytes.
+    # On cache hit we skip parse_variable_token AND Variable.new.
+    # Wrapped in a non-Hash object so it survives the test harness's mutable-Hash sweep.
+    # Only safe when error_mode == :lax and line_numbers off.
+    class VarInstanceStore
+      MAX_ENTRIES = 16384
+
+      def initialize
+        @data = {}
+      end
+
+      def [](key)
+        @data[key]
+      end
+
+      def []=(key, value)
+        @data.delete(@data.first.first) while @data.size >= MAX_ENTRIES
+        @data[key] = value
+      end
+    end
+
+    SHARED_VAR_INSTANCE_CACHE = VarInstanceStore.new
+
     def create_variable(token, parse_context)
       len = token.bytesize
       if len >= 4 && token.getbyte(len - 1) == CLOSE_CURLEY_BYTE && token.getbyte(len - 2) == CLOSE_CURLEY_BYTE
+        if parse_context.error_mode == :lax && parse_context.line_number.nil?
+          cached = SHARED_VAR_INSTANCE_CACHE[token]
+          return cached if cached
+          markup = parse_context.cursor.parse_variable_token(token)
+          v = Variable.new(markup, parse_context)
+          SHARED_VAR_INSTANCE_CACHE[token] = v
+          return v
+        end
         markup = parse_context.cursor.parse_variable_token(token)
         return Variable.new(markup, parse_context)
       end
