@@ -137,6 +137,7 @@ module Liquid
     private def parse_for_document(tokenizer, parse_context, &block)
       cursor = parse_context.cursor
       environment = parse_context.environment
+      track_lines = !parse_context.line_number.nil?
       while (token = tokenizer.shift)
         next if token.empty?
 
@@ -151,7 +152,7 @@ module Liquid
             end
             markup = cursor.tag_markup
 
-            if parse_context.line_number
+            if track_lines
               newlines = cursor.tag_newlines
               parse_context.line_number += newlines if newlines > 0
             end
@@ -177,20 +178,20 @@ module Liquid
             # Fallback: text token starting with '{'
             if parse_context.trim_whitespace
               token.lstrip!
+              parse_context.trim_whitespace = false
             end
-            parse_context.trim_whitespace = false
             @nodelist << token
             @blank &&= BlockBody.blank_string?(token)
           end
         else
           if parse_context.trim_whitespace
             token.lstrip!
+            parse_context.trim_whitespace = false
           end
-          parse_context.trim_whitespace = false
           @nodelist << token
           @blank &&= BlockBody.blank_string?(token)
         end
-        parse_context.line_number = tokenizer.line_number
+        parse_context.line_number = tokenizer.line_number if track_lines
       end
 
       yield nil, nil
