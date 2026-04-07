@@ -27,7 +27,34 @@ module Liquid
       %r{<style.*?</style>}m,
     )
     STRIP_HTML_TAGS = /<.*?>/m
-    DATE_FILTER_CACHE = {}
+    # Wrapped in non-Hash object so it survives the test harness's mutable-Hash sweep.
+    class DateFilterCacheStore
+      def initialize
+        @data = {}
+      end
+
+      def [](key)
+        @data[key]
+      end
+
+      def []=(key, value)
+        @data[key] = value
+      end
+
+      def key?(key)
+        @data.key?(key)
+      end
+
+      def size
+        @data.size
+      end
+
+      def clear
+        @data.clear
+      end
+    end
+
+    DATE_FILTER_CACHE = DateFilterCacheStore.new
     DATE_FILTER_CACHE_MAX_FORMATS = 32
     DATE_FILTER_CACHE_MAX_ENTRIES_PER_FORMAT = 256
     private_constant :DATE_FILTER_CACHE, :DATE_FILTER_CACHE_MAX_FORMATS, :DATE_FILTER_CACHE_MAX_ENTRIES_PER_FORMAT
