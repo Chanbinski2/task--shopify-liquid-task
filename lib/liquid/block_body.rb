@@ -167,7 +167,18 @@ module Liquid
               # determine how to proceed
               return yield tag_name, markup
             end
-            new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+            # Self-closing tag cache: only when not a Block subclass and in lax mode w/o line numbers
+            if !(tag <= Liquid::Block) && parse_context.error_mode == :lax && !track_lines
+              cached = SHARED_TAG_INSTANCE_CACHE[token]
+              if cached
+                new_tag = cached
+              else
+                new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+                SHARED_TAG_INSTANCE_CACHE[token] = new_tag
+              end
+            else
+              new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+            end
             @blank &&= new_tag.blank?
             @nodelist << new_tag
           elsif second_byte == OPEN_CURLEY_BYTE
@@ -296,6 +307,10 @@ module Liquid
     end
 
     SHARED_VAR_INSTANCE_CACHE = VarInstanceStore.new
+
+    # Shared cache of self-closing Tag instances (those that don't consume
+    # additional tokens beyond their start token), keyed by full token bytes.
+    SHARED_TAG_INSTANCE_CACHE = VarInstanceStore.new
 
     def create_variable(token, parse_context)
       len = token.bytesize
