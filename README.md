@@ -28,6 +28,11 @@ The eval is designed to discourage benchmark gaming: parse timing uses salted te
 
 Only compare benchmark numbers from the same environment.
 
+## Notes
+
+- Ensure Ruby 3.4 + YJIT is available before running benchmarks.
+- All 975 tests must pass for a valid submission.
+
 ## Leaderboard
 
 Create the hive task to get the live leaderboard URL. Until upload, use local eval output as the source of truth.
